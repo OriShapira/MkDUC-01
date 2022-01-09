@@ -10,6 +10,7 @@ from collections import Counter
 import spacy
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
+import random
 
 stemmer = PorterStemmer()
 
@@ -103,11 +104,28 @@ def get_kps_collab_rank(nlp, doc_list):
     return docs_kps
 
 
+_bertKPE_data = {} # topicId -> [list of KP lists, KP list for each doc in the topic]
+def get_kps_BERTKPE(topicId):
+    if len(_bertKPE_data) == 0:
+        results_path = 'bertkpe_single_doc_outputs/bert2joint.duc2001_dev.roberta.epoch_6.checkpoint_single'
+        with open(results_path, 'r') as fIn:
+            for line in fIn:
+                docInfo = json.loads(line.strip())
+                docFullIdParts = docInfo['url'].split('_')
+                topicId = docFullIdParts[0]
+                docId = docFullIdParts[1]
+                docKps = [' '.join(kpTokens) for kpTokens in docInfo['KeyPhrases']]
+                if topicId not in _bertKPE_data:
+                    _bertKPE_data[topicId] = []
+                _bertKPE_data[topicId].append(docKps)
+
+    return _bertKPE_data[topicId]
+
 
 def generate_kps(algName, algClass, topics_docs, num_kps_generate=20, generation_mode=GENERATION_MODE_DOCS_CONCAT):
     assert generation_mode in [GENERATION_MODE_DOCS_CONCAT, GENERATION_MODE_DOCS_MERGE]
-    if algName == 'CollabRank' and generation_mode == GENERATION_MODE_DOCS_CONCAT:
-        raise('Error: cannot run CollabRank in CONCAT mode.')
+    if algName in ['CollabRank', 'BERTKPE'] and generation_mode == GENERATION_MODE_DOCS_CONCAT:
+        raise('Error: cannot run CollabRank or BERTKPE in CONCAT mode.')
     
     def get_kps(algClass, text):
         try:
@@ -130,12 +148,17 @@ def generate_kps(algName, algClass, topics_docs, num_kps_generate=20, generation
 
     for topicId, doc_list in topics_docs.items():
         print(f'Generating for topic {topicId}')
+        # in concat mode, shuffle the documents (kept the same for all algorithms):
         if generation_mode == GENERATION_MODE_DOCS_CONCAT:
-            topicDocsConcat = ' '.join(doc_list)
+            topicDocsCopy = doc_list[:]
+            random.shuffle(topicDocsCopy)
+            topicDocsConcat = ' '.join(topicDocsCopy)
             pred_kps[topicId] = get_kps(algClass, topicDocsConcat)
         elif generation_mode == GENERATION_MODE_DOCS_MERGE:
             if algName == 'CollabRank':
                 docs_kps = get_kps_collab_rank(nlp, doc_list)
+            elif algName == 'BERTKPE':
+                    docs_kps = get_kps_BERTKPE(topicId)
             else:
                 docs_kps = [get_kps(algClass, docTxt) for docTxt in doc_list]
             pred_kps[topicId] = merge_docs_kps(docs_kps, doc_list)
@@ -170,7 +193,7 @@ def output_results(pred_kps, all_scores, output_dir):
 
 
 
-def main(algorithms, generation_mode, outputFolderpath, useTrunc20=True):
+def main(algorithms, generation_mode, outputFolderpath, useTrunc20=True, evalClusterLevel=True):
     mkde_evaluator = MKDUC01_Eval()
     topics_docs = mkde_evaluator.get_topic_docs()
     all_kps = {}
@@ -179,7 +202,7 @@ def main(algorithms, generation_mode, outputFolderpath, useTrunc20=True):
         print(f'Generating KPs for {algName}...')
         pred_kps_per_topic = generate_kps(algName, algClass, topics_docs, generation_mode=generation_mode)
         print(f'Evaluating KPs for {algName}...')
-        final_scores = mkde_evaluator.evaluate(pred_kps_per_topic, gold_trunc20=useTrunc20)
+        final_scores = mkde_evaluator.evaluate(pred_kps_per_topic, gold_trunc20=useTrunc20, clusterLevel=evalClusterLevel)
         all_kps[algName] = pred_kps_per_topic
         all_scores[algName] = final_scores
     print('Outputing KPs for all algorithms...')
@@ -196,9 +219,10 @@ if __name__ == '__main__':
         'TopicalPageRank': pke.unsupervised.TopicalPageRank,
         'PositionRank': pke.unsupervised.PositionRank,
         'MultipartiteRank': pke.unsupervised.MultipartiteRank,
-        #'CollabRank': pke.unsupervised.CollabRank
+        'CollabRank': pke.unsupervised.CollabRank, # not for "concat" mode
+        'BERTKPE': None # not for "concat" mode; The BERTKPE algorithm was run separately, with outputs in bertkpe_single_doc_outputs
     }
-    #outputFolderpath = 'results_baselines_merge_trunc20'
-    #main(algorithms, GENERATION_MODE_DOCS_MERGE, outputFolderpath, useTrunc20=True)
-    outputFolderpath = 'results_baselines_concat_trunc20'
-    main(algorithms, GENERATION_MODE_DOCS_CONCAT, outputFolderpath, useTrunc20=True)
+    outputFolderpath = 'results_baselines_merge_trunc20'
+    main(algorithms, GENERATION_MODE_DOCS_MERGE, outputFolderpath, useTrunc20=True, evalClusterLevel=True)
+    #outputFolderpath = 'results_baselines_concat_trunc20'
+    #main(algorithms, GENERATION_MODE_DOCS_CONCAT, outputFolderpath, useTrunc20=True, evalClusterLevel=True)
