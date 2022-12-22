@@ -7,7 +7,7 @@ The dataset consists of 30 topics (document sets), each with an average of about
 This package also includes a utility for easy keyphrase extraction task evaluation on the dataset (F1@k and unigram-F1@k).
 
 The data and code here follow the paper:
-[Multi-Document Keyphrase Extraction: A Literature Review and the First Dataset](https://arxiv.org/pdf/2110.01073.pdf)
+[Multi-Document Keyphrase Extraction: Dataset, Baselines and Review](https://arxiv.org/pdf/2110.01073.pdf)
 Ori Shapira, Ramakanth Pasunuru, Ido Dagan, and Yael Amsterdamer
 
 ## How to Get the Data
@@ -70,7 +70,7 @@ If you use any of the dataset, evaluation tool or baselines, please cite the pap
 ```
 @article{shapiraetal2021mdke,
   author    = {Ori Shapira and Ramakanth Pasunuru and Ido Dagan and Yael Amsterdamer},
-  title     = "{Multi-Document Keyphrase Extraction: A Literature Review and the First Dataset}", 
+  title     = "{Multi-Document Keyphrase Extraction: Dataset, Baselines and Review}", 
   journal   = {arXiv preprint arXiv:2110.01073},
   year      = {2021},
   archivePrefix={arXiv},
